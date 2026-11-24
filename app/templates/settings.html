@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="top"><h1>설정·상태</h1><span class="muted">설정은 config 폴더의 파일을 고쳐서 바꿉니다. 이 화면은 읽기 전용입니다.</span></header>
+<div class="two">
+  <section class="card">
+    <h2>동작 상태</h2>
+    <ul class="list status">
+      <li><span class="led {{ 'ok' if status.worker.ok else 'bad' }}"></span>작업기 마지막 동작 <span class="muted">{{ status.worker.at }}</span></li>
+      <li><span class="led {{ 'ok' if status.mail.ok else 'bad' }}"></span>메일 수집({{ status.mail.source }}) 마지막 성공 <span class="muted">{{ status.mail.at }}</span>{% if status.mail.error %}<div class="sub red">{{ status.mail.error }}</div>{% endif %}</li>
+      <li><span class="led {{ 'ok' if status.model.ok else 'bad' }}"></span>모델 {{ status.model.name }}{% if status.model.error %}<div class="sub red">{{ status.model.error }}</div>{% endif %}</li>
+      <li><span class="led {{ 'ok' if status.news.ok else 'bad' }}"></span>보안 동향 마지막 수집 <span class="muted">{{ status.news.at }}</span></li>
+      <li><span class="led {{ 'ok' if status.telegram else 'off' }}"></span>텔레그램 {{ '봇 연결됨' if status.telegram else '봇 토큰 없음 (알림은 기록만 남음)' }}</li>
+      <li class="plain">모델 대기 {{ status.queue }}건 · 모델 실패 {{ status.failed }}건</li>
+    </ul>
+  </section>
+  <section class="card">
+    <h2>알림 기준</h2>
+    <dl class="kv narrow">
+      <dt>근무 시간</dt><dd>{{ cfg.rules.work_hours.start }} ~ {{ cfg.rules.work_hours.end }} (월~금 기준 설정)</dd>
+      <dt>모델 대기</dt><dd>{{ cfg.alert.model_wait_seconds }}초 넘으면 "번역 대기"로 먼저 알림</dd>
+      <dt>긴급 재알림</dt><dd>{{ cfg.alert.reack_minutes }}분마다, 최대 {{ cfg.alert.reack_max }}회</dd>
+      <dt>기한 알림</dt><dd>매일 {{ cfg.alert.deadline_alert_time }} · {{ cfg.alert.deadline_days | join(', ') }}일 전과 기한 넘긴 날</dd>
+    </dl>
+  </section>
+</div>
+
+<section class="card">
+  <h2>낱말 규칙 <span class="muted">원문에 이 낱말이 있으면 모델 판단과 상관없이 긴급으로 올립니다</span></h2>
+  <table class="tbl">
+    <thead><tr><th>신호</th><th>낱말</th></tr></thead>
+    <tbody>{% for s in cfg.rules.signals %}<tr><td class="nowrap wide"><b>{{ s.name }}</b></td><td class="wide">{{ s.words | join(' · ') }}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<div class="two">
+  <section class="card">
+    <h2>고객사와 등록 발신자</h2>
+    <table class="tbl">
+      <thead><tr><th>고객사</th><th>발신자</th><th>담당 엔지니어</th><th>동향 대조 낱말</th></tr></thead>
+      <tbody>
+      {% for code, c in cfg.customers.items() %}
+        <tr>
+          <td class="wide"><span class="dot" style="background:{{ c.color }}"></span><b>{{ c.name }}</b></td>
+          <td class="wide" data-label="발신자">{% for s in c.senders %}<div>{{ s.name }} <span class="muted">{{ s.addr }}</span></div>{% endfor %}</td>
+          <td class="wide" data-label="담당 엔지니어">{% for k, v in c.routing.items() %}<div>{{ '기본' if k == 'default' else k }}: {{ cfg.staff_name(v) }}</div>{% endfor %}</td>
+          <td class="wide" data-label="동향 대조 낱말">{{ c.products | join(', ') }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>알림 받는 사람</h2>
+    <table class="tbl c3">
+      <thead><tr><th>이름</th><th>역할</th><th>텔레그램</th></tr></thead>
+      <tbody>{% for code, s in cfg.staff.items() %}<tr><td data-label="이름">{{ s.name }}</td><td data-label="역할">{{ 'PM' if s.role == 'pm' else '엔지니어' }}</td><td data-label="텔레그램">{{ '연결됨' if s.telegram_chat_id else '미설정' }}</td></tr>{% endfor %}</tbody>
+    </table>
+    <h2 class="mt">용어집 <span class="muted">{{ cfg.glossary | length }}개</span></h2>
+    <p class="terms">{% for src, dst in cfg.glossary %}<span>{{ src }} → {{ dst }}</span>{% endfor %}</p>
+  </section>
+</div>
+{% endblock %}

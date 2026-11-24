@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="top">
+  <h1>최신 보안 동향</h1>
+  <div class="tabs links">
+    <a class="{{ 'on' if tab != 'matched' }}" href="/news?tab=all{{ '&source=' ~ source if source }}">전체</a>
+    <a class="{{ 'on' if tab == 'matched' }}" href="/news?tab=matched{{ '&source=' ~ source if source }}">우리 고객사 관련</a>
+  </div>
+</header>
+<section class="card">
+  <div class="filters">
+    <a class="pill {{ 'on' if not source }}" href="/news?tab={{ tab }}">모든 출처</a>
+    {% for s in sources %}<a class="pill {{ 'on' if source == s }}" href="/news?tab={{ tab }}&source={{ s | urlencode }}">{{ s }}</a>{% endfor %}
+  </div>
+  {% if error %}<p class="notice amber">일부 출처를 가져오지 못했습니다: {{ error }}</p>{% endif %}
+  <table class="tbl">
+    <thead><tr><th>시각</th><th>출처</th><th>제목</th><th>관련 고객사</th></tr></thead>
+    <tbody>
+    {% for n in items %}
+      <tr>
+        <td class="nowrap muted">{{ n.when }}</td>
+        <td class="nowrap">{{ n.source }}</td>
+        <td class="wide"><a href="{{ n.link }}" target="_blank" rel="noopener noreferrer">{{ n.title }}</a></td>
+        <td class="wide">{% for c in n.matched_names %}<span class="tag tag-blue">{{ c }}</span> {% endfor %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">표시할 글이 없습니다.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="sub">제목과 링크만 보여 주며 본문은 각 출처에서 확인합니다. 관련 고객사는 설정에 등록한 제품·제조사 낱말이 제목에 있는지로 표시합니다.</p>
+</section>
+{% endblock %}

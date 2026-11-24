@@ -1,0 +1,8 @@
+# 최신 보안 동향 출처. 제목·시각·링크만 저장하고 본문은 가져오지 않는다.
+fetch_minutes: 30
+keep_days: 30
+sources:
+  - {name: 보안뉴스, type: rss, url: "https://www.boannews.com/rss/allArticle.xml"}
+  - {name: 데일리시큐, type: rss, url: "https://www.dailysecu.com/rss/allArticle.xml"}
+  - {name: KISA 보안공지, type: rss, url: "https://www.boho.or.kr/kr/rss.do?bbsId=B0000133"}
+  - {name: CISA KEV, type: kev, url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", recent_days: 45}

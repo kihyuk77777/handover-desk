@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<header class="top">
+  <h1>문의 목록</h1>
+  <form method="get" class="filters">
+    <select name="show">
+      <option value="open" {{ 'selected' if show == 'open' }}>처리 중</option>
+      <option value="closed" {{ 'selected' if show == 'closed' }}>종료</option>
+      <option value="all" {{ 'selected' if show == 'all' }}>전체</option>
+    </select>
+    <select name="customer">
+      <option value="">모든 고객사</option>
+      {% for code, c in cfg.customers.items() %}<option value="{{ code }}" {{ 'selected' if customer == code }}>{{ c.name }}</option>{% endfor %}
+    </select>
+    <button type="submit">보기</button>
+  </form>
+</header>
+<section class="card">
+  {{ m.queue_table(issues, "조건에 맞는 문의가 없습니다.") }}
+</section>
+{% endblock %}

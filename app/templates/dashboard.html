@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main_attrs %}data-refresh="60"{% endblock %}
+{% block content %}
+<header class="top">
+  <h1>대시보드</h1>
+  <span class="muted">{{ now.strftime('%Y-%m-%d %H:%M') }} 기준 · 60초마다 새로 고침</span>
+</header>
+
+<section class="kpis">
+  <div class="kpi {{ 'kpi-red' if numbers.unacked }}"><div class="k">확인 안 된 긴급</div><div class="v">{{ numbers.unacked }}</div><div class="s">긴급 전체 {{ numbers.urgent }}건</div></div>
+  <div class="kpi"><div class="k">처리 중인 문의</div><div class="v">{{ numbers.open }}</div><div class="s">오늘 접수 {{ numbers.today }}건</div></div>
+  <div class="kpi"><div class="k">우리가 답할 차례</div><div class="v">{{ numbers.ours }}</div><div class="s">고객사 회신 대기 {{ numbers.open - numbers.ours }}건</div></div>
+  <div class="kpi {{ 'kpi-amber' if numbers.stale }}"><div class="k">기한 넘긴 건</div><div class="v">{{ numbers.stale }}</div><div class="s">우리 차례로 {{ cfg.alert.get('stale_days', 3) }}일 초과</div></div>
+  <div class="kpi"><div class="k">보류 메일</div><div class="v">{{ numbers.held }}</div><div class="s"><a href="/held">미등록·인증 실패</a></div></div>
+</section>
+
+<div class="cols">
+  <div class="col-main">
+    <section class="card">
+      <h2>중요도별 대응 대기열 <a class="more" href="/issues">전체 보기</a></h2>
+      {{ m.queue_table(issues) }}
+    </section>
+
+    <section class="card">
+      <h2>고객사별 현황</h2>
+      <table class="tbl c4">
+        <thead><tr><th>고객사</th><th class="c-num">긴급</th><th class="c-num">보통</th><th class="c-num">낮음</th><th class="c-num">가장 오래된 건</th><th>프로젝트 진행</th><th>다음 기한</th></tr></thead>
+        <tbody>
+        {% for c in customers %}
+          <tr>
+            <td class="wide"><span class="dot" style="background:{{ c.color }}"></span><a href="/issues?customer={{ c.code }}">{{ c.name }}</a></td>
+            <td class="c-num {{ 'red' if c.urgent }}" data-label="긴급">{{ c.urgent }}</td>
+            <td class="c-num" data-label="보통">{{ c.normal }}</td>
+            <td class="c-num" data-label="낮음">{{ c.low }}</td>
+            <td class="c-num" data-label="최장 경과">{{ c.oldest }}</td>
+            <td class="wide">{% for p in c.projects %}<div class="sub">{{ p.name }}</div>{{ m.strip(p) }}{% else %}<span class="muted">등록된 프로젝트 없음</span>{% endfor %}</td>
+            <td class="wide">{% for p in c.projects %}{% if p.next %}<div class="{{ 'red' if p.next.overdue }}">{{ p.next.title }} <b>{{ dday_label(p.next.dday) }}</b><div class="sub">{{ p.next.due_date }}</div></div>{% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="two">
+      <section class="card">
+        <h2>부재 시간 접수 <span class="muted">{{ absent_since.strftime('%m-%d %H:%M') }} 이후</span></h2>
+        <ul class="list">
+        {% for i in absent %}
+          <li>{{ m.level(i) }} <a href="/issues/{{ i.id }}">{{ i.display_title }}</a>
+            <div class="sub">{{ i.customer_name }} · {{ i.opened_at[5:16] }} · {% if i.acked_at %}확인 {{ i.acked_by }}{% else %}확인 전{% endif %}</div></li>
+        {% else %}
+          <li class="empty">근무 시간 밖에 들어온 문의가 없습니다.</li>
+        {% endfor %}
+        </ul>
+      </section>
+      <section class="card">
+        <h2>여러 고객사 공통 현상 <span class="muted">최근 7일</span></h2>
+        <ul class="list">
+        {% for p in patterns %}
+          <li><b>{{ p.category }}</b> {{ p.count }}건<div class="sub">{{ p.customers | join(', ') }}</div></li>
+        {% else %}
+          <li class="empty">두 곳 이상에서 겹친 유형이 없습니다.</li>
+        {% endfor %}
+        </ul>
+        <h2 class="mt">엔지니어별 담당</h2>
+        <ul class="list">
+        {% for e in load %}
+          <li>{{ e.name }} <b>{{ e.total }}</b>건{% if e.urgent %} <span class="red">(긴급 {{ e.urgent }})</span>{% endif %}</li>
+        {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <div class="col-side">
+    <section class="card">
+      <h2>다가오는 기한 <a class="more" href="/calendar">달력</a></h2>
+      <ul class="list">
+      {% for d in upcoming %}
+        <li class="{{ 'red' if d.overdue }}"><b>{{ dday_label(d.dday) }}</b> {{ d.title }}
+          <div class="sub"><span class="dot" style="background:{{ d.color }}"></span>{{ d.customer_name }} · {{ d.due_date }}{% if d.holidays %} · {{ d.holidays | join(', ') }}{% endif %}</div></li>
+      {% else %}
+        <li class="empty">7일 안에 닥친 기한이 없습니다.</li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section class="card" data-tabs>
+      <h2>최신 보안 동향 <a class="more" href="/news">전체 보기</a></h2>
+      <div class="tabs">
+        <button type="button" class="on" data-tab="all">전체</button>
+        <button type="button" data-tab="matched">우리 고객사 관련 ({{ news_matched | length }})</button>
+      </div>
+      {% for key, items in [('all', news_all), ('matched', news_matched)] %}
+      <ul class="list news {{ 'hide' if key != 'all' }}" data-pane="{{ key }}">
+        {% for n in items %}
+          <li><span class="src">{{ n.source }}</span>
+            <a href="{{ n.link }}" target="_blank" rel="noopener noreferrer">{{ n.title }}</a>
+            <div class="sub">{{ n.when }}{% for c in n.matched_names %} <span class="tag tag-blue">{{ c }}</span>{% endfor %}</div></li>
+        {% else %}
+          <li class="empty">{{ '해당하는 글이 없습니다.' if key == 'matched' else '아직 수집된 글이 없습니다.' }}</li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    </section>
+
+    <section class="card">
+      <h2>수집·모델 상태 <a class="more" href="/settings">자세히</a></h2>
+      <ul class="list status">
+        <li><span class="led {{ 'ok' if status.worker.ok else 'bad' }}"></span>작업기 <span class="muted">{{ status.worker.at }}</span></li>
+        <li><span class="led {{ 'ok' if status.mail.ok else 'bad' }}"></span>메일 수집({{ status.mail.source }}) <span class="muted">{{ status.mail.at }}</span>
+          {% if status.mail.error %}<div class="sub red">{{ status.mail.error }}</div>{% endif %}</li>
+        <li><span class="led {{ 'ok' if status.model.ok else 'bad' }}"></span>모델 <span class="muted">{{ status.model.name }}</span>
+          {% if not status.model.ok %}<div class="sub red">연결 안 됨 · 낱말 규칙만으로 알림</div>{% endif %}</li>
+        <li><span class="led {{ 'ok' if status.news.ok else 'bad' }}"></span>보안 동향 <span class="muted">{{ status.news.at }}</span></li>
+        <li><span class="led {{ 'ok' if status.telegram else 'off' }}"></span>텔레그램 <span class="muted">{{ '발송 중' if status.telegram else '봇 미설정 · 기록만 남김' }}</span></li>
+        <li class="plain">모델 대기 {{ status.queue }}건 · 모델 실패 {{ status.failed }}건</li>
+        <li class="plain">중요도 정정 {{ corrections.total }}건 <span class="muted">(최근 30일 · 내림 {{ corrections.lowered }}, 올림 {{ corrections.raised }})</span></li>
+      </ul>
+    </section>
+  </div>
+</div>
+{% endblock %}

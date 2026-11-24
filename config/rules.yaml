@@ -1,0 +1,34 @@
+# 낱말 규칙과 알림 기준. 모델 판단과 나란히 적용하고, 둘 중 높은 쪽을 따른다.
+
+work_hours:
+  start: "09:00"
+  end: "18:00"
+  days: [0, 1, 2, 3, 4]        # 0=월요일
+
+alert:
+  model_wait_seconds: 90        # 이 시간 안에 모델 결과가 없으면 "번역 대기"로 먼저 알림
+  late_minutes: 10              # 도착 후 이보다 늦게 처리하면 "지연 수신" 표시
+  reack_minutes: 10             # 긴급 알림을 아무도 확인하지 않으면 다시 보내는 간격
+  reack_max: 3
+  deadline_alert_time: "08:30"
+  deadline_days: [7, 3, 1, 0]   # 기한 며칠 전에 알릴지
+  stale_days: 3                 # 우리 차례인 채 이 일수를 넘기면 "기한 넘김"
+
+# level: urgent 만 등급을 올린다. 낱말은 대소문자 구분 없이 부분 일치.
+signals:
+  - name: 서비스 중단
+    level: urgent
+    words: [다운, 장애, 먹통, 중단, 접속 불가, 접속불가, 마비, 宕机, 中断, 瘫痪, 无法访问, 无法登录, 断网, 挂了, 故障, down, outage, unreachable]
+  - name: 침해 의심
+    level: urgent
+    words: [랜섬, 해킹, 침해, 악성코드, 감염, 암호화되, 암호화됐, 유출, 勒索, 被加密, 入侵, 木马, 病毒, 泄露, 被黑, ransom, malware, breach, compromised]
+  - name: 수집 전면 중단
+    level: urgent
+    words: [로그가 안 들어, 로그가 들어오지, 수집이 안, 수집 안됨, 日志进不来, 收不到日志, 日志中断, 没有日志]
+  - name: 당일 기한
+    level: urgent
+    words: [오늘 중, 오늘까지, 금일 중, 금일까지, 今天之内, 今天必须, 今日内]
+  # 내용이 사소해도 고객이 긴급이라고 쓴 글은 일단 소리 알림으로 보내고, 등급은 사람이 내린다.
+  - name: 고객 긴급 표시
+    level: urgent
+    words: [긴급, 紧急, 緊急, 马上, 立即, 立刻, urgent, asap]

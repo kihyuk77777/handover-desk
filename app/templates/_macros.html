@@ -1,0 +1,47 @@
+{% macro level(issue) -%}
+<span class="lv lv-{{ issue.urgency }}">{{ issue.level_name }}</span>
+{%- endmacro %}
+
+{% macro flags(issue) -%}
+{% if issue.urgency == 'urgent' and not issue.acked_at %}<span class="tag tag-red">미확인</span>{% endif %}
+{% if issue.model_status == 'pending' %}<span class="tag">번역 대기</span>{% endif %}
+{% if issue.model_status == 'failed' %}<span class="tag tag-amber">모델 실패</span>{% endif %}
+{% if issue.injection %}<span class="tag tag-amber">지시문 의심</span>{% endif %}
+{% if issue.disagree %}<span class="tag" title="모델은 더 낮게 봤지만 낱말 규칙으로 올림">규칙으로 올림</span>{% endif %}
+{% if issue.not_new %}<span class="tag">통보·회신</span>{% endif %}
+{% if issue.issue_count and issue.issue_count > 1 %}<span class="tag">문제 {{ issue.issue_count }}건</span>{% endif %}
+{% if issue.after_hours %}<span class="tag">부재 시간</span>{% endif %}
+{% if issue.stale %}<span class="tag tag-red">기한 넘김</span>{% endif %}
+{%- endmacro %}
+
+{% macro queue_table(issues, empty="대기 중인 문의가 없습니다.") -%}
+<table class="tbl queue">
+  <thead><tr>
+    <th class="c-lv">중요도</th><th>고객사</th><th>내용</th><th>보낸 사람</th>
+    <th class="c-num">경과</th><th>답할 차례</th><th>담당</th>
+  </tr></thead>
+  <tbody>
+  {% for i in issues %}
+    <tr class="row-{{ i.urgency }}{{ ' row-closed' if i.status == 'closed' }}">
+      <td class="c-lv">{{ level(i) }}</td>
+      <td class="q-cust"><span class="dot" style="background:{{ i.color }}"></span>{{ i.customer_name }}
+        {% if i.deadline_badge %}<div class="sub {{ 'red' if i.deadline_badge.overdue }}">{{ i.deadline_badge.label }}</div>{% endif %}</td>
+      <td class="c-title"><a href="/issues/{{ i.id }}">{{ i.display_title }}</a>
+        <div class="sub">{{ flags(i) }} {% if i.category %}<span class="muted">{{ i.category }}</span>{% endif %}</div></td>
+      <td data-label="보낸 사람">{{ i.contact_name }}</td>
+      <td class="c-num q-age">{{ i.age }}</td>
+      <td data-label="답할 차례">{% if i.status == 'closed' %}<span class="muted">종료</span>{% else %}<span class="ball ball-{{ i.ball }}">{{ i.ball_name }}</span> <span class="muted">{{ i.ball_age }}</span>{% endif %}</td>
+      <td data-label="담당">{{ i.assignee_name }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty">{{ empty }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{%- endmacro %}
+
+{% macro strip(project) -%}
+<div class="strip" title="{{ project.name }}">
+  {% for s in project.strip %}<span class="st st-{{ s.state }}">{{ s.name }}</span>{% endfor %}
+</div>
+{%- endmacro %}

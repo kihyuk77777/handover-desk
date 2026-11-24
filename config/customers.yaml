@@ -1,0 +1,36 @@
+# 고객사와 메일 발신 담당자. 여기 등록된 주소에서 온 메일만 판단·알림 대상이 된다.
+# 아래 값은 모두 시연용 가상 자료다.
+customers:
+  - code: gaon
+    name: 가온정밀 우시 법인
+    color: "#5aa9e6"
+    # 보안 동향 대조에 쓰는 낱말 (보유 제품·제조사)
+    products: [Fortinet, FortiGate, 방화벽, VMware, vCenter]
+    routing:
+      default: eng_park
+      로그수집이상: eng_choi
+    senders:
+      - {addr: wang.lei@gaon-precision.example, name: 王磊, lang: zh}
+      - {addr: li.na@gaon-precision.example, name: 李娜, lang: zh}
+      - {addr: jh.seo@gaon-precision.example, name: 서지훈, lang: ko}
+
+  - code: hanbit
+    name: 한빛케미칼 우시 공장
+    color: "#f2a65a"
+    products: [Cisco, ASA, Microsoft, Exchange, Windows Server]
+    routing:
+      default: eng_choi
+    senders:
+      - {addr: zhang.wei@hanbit-chem.example, name: 张伟, lang: zh}
+      - {addr: mj.kang@hanbit-chem.example, name: 강민재, lang: ko}
+
+  - code: saeron
+    name: 새론물류 화동 센터
+    color: "#7bc47f"
+    products: [Palo Alto, PAN-OS, Citrix, NetScaler]
+    routing:
+      default: eng_park
+      계정권한: eng_choi
+    senders:
+      - {addr: chen.jing@saeron-logis.example, name: 陈静, lang: zh}
+      - {addr: sy.yoon@saeron-logis.example, name: 윤서연, lang: ko}

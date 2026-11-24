@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="top"><h1>보류 메일</h1><span class="muted">등록되지 않은 주소에서 왔거나 발신 인증에 실패한 메일. 모델에 넘기지 않고 알림도 보내지 않습니다.</span></header>
+<section class="card">
+  <table class="tbl">
+    <thead><tr><th>받은 시각</th><th>사유</th><th>보낸 사람</th><th>제목과 본문</th></tr></thead>
+    <tbody>
+    {% for mail in items %}
+      <tr>
+        <td class="nowrap muted" data-label="받은 시각">{{ mail.received_at[5:16] }}</td>
+        <td class="nowrap" data-label="사유"><span class="tag tag-amber">{{ mail.held_reason }}</span>{% if mail.in_spam %} <span class="tag">스팸함</span>{% endif %}</td>
+        <td class="wide" data-label="보낸 사람">{{ mail.from_name }}<div class="sub">{{ mail.from_addr }}</div></td>
+        <td class="wide"><details><summary>{{ mail.subject or '(제목 없음)' }}</summary><pre>{{ mail.body }}</pre></details></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">보류된 메일이 없습니다.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="sub">고객사 담당자가 맞다면 설정 파일(config/customers.yaml)의 발신자 목록에 주소를 추가하십시오.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Handover Desk model tunnel
+After=network-online.target
+
+[Service]
+User=APP_USER
+ExecStart=/usr/bin/ssh -N -L 127.0.0.1:11436:127.0.0.1:11434 \
+    -i /home/APP_USER/.ssh/id_desk_tunnel \
+    -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -o StrictHostKeyChecking=yes -o BatchMode=yes \
+    MODEL_USER@MODEL_HOST
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

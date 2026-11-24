@@ -1,0 +1,6 @@
+# 알림을 받는 사람. telegram_chat_id가 비어 있으면 실제 발송 없이 알림 기록에만 남는다.
+# 실제 chat_id는 이 파일이 아니라 .env의 TG_CHAT_<코드 대문자> 값으로 넣는다.
+staff:
+  - {code: pm_kim, name: 김도현, role: pm}
+  - {code: eng_park, name: 박서준, role: engineer}
+  - {code: eng_choi, name: 최유나, role: engineer}

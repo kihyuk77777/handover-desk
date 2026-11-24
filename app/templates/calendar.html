@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<header class="top">
+  <h1>기한 달력</h1>
+  <div class="monthnav">
+    <a href="/calendar?ym={{ prev }}">‹ 이전 달</a>
+    <b>{{ year }}년 {{ month }}월</b>
+    <a href="/calendar?ym={{ next }}">다음 달 ›</a>
+    <a href="/calendar?ym={{ this }}" class="muted">이번 달</a>
+  </div>
+</header>
+
+<div class="cols">
+  <div class="col-main">
+    <section class="card">
+      <table class="cal">
+        <thead><tr>{% for w in weekdays %}<th class="{{ 'we' if loop.index > 5 }}">{{ w }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for week in grid.weeks %}
+          <tr>
+          {% for cell in week %}
+            <td class="{{ 'out' if not cell.in_month }} {{ 'today' if cell.today }} {{ 'we' if loop.index > 5 }} {{ 'hday' if cell.holidays }}">
+              <div class="daynum">{{ cell.date.day }}{% for h in cell.holidays %} <span class="hol">{{ h }}</span>{% endfor %}</div>
+              {% for d in cell['items'] %}
+                <a class="chip {{ 'chip-done' if d.done_at }} {{ 'chip-over' if d.overdue }}" style="--c:{{ d.color }}" href="#p{{ d.project_id }}" title="{{ d.customer_name }} · {{ d.project_name }}">{{ d.title }}</a>
+              {% endfor %}
+            </td>
+          {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <ul class="list agenda m-only">
+      {% for week in grid.weeks %}{% for cell in week %}{% if cell.in_month %}{% for d in cell['items'] %}
+        <li class="{{ 'done' if d.done_at }} {{ 'red' if d.overdue }}"><a href="#p{{ d.project_id }}"><b>{{ cell.date.day }}일({{ weekdays[cell.date.weekday()] }})</b> {{ d.title }}</a>
+          <div class="sub"><span class="dot" style="background:{{ d.color }}"></span>{{ d.customer_name }} · {{ d.project_name }}{% if d.done_at %} · 완료{% endif %}{% if cell.holidays %} · {{ cell.holidays | join(', ') }}{% endif %}</div></li>
+      {% endfor %}{% endif %}{% endfor %}{% endfor %}
+      </ul>
+      <div class="legend">
+        {% for code, c in cfg.customers.items() %}<span><span class="dot" style="background:{{ c.color }}"></span>{{ c.name }}</span>{% endfor %}
+        <span class="muted">흐린 항목은 완료, 붉은 항목은 기한 넘김</span>
+      </div>
+    </section>
+
+    <a id="projects"></a>
+    {% for p in boards %}
+    <section class="card" id="p{{ p.id }}">
+      <h2><span class="dot" style="background:{{ p.color }}"></span>{{ p.customer_name }} · {{ p.name }}</h2>
+      {{ m.strip(p) }}
+      <details class="fold" open>
+      <summary>기한 항목 {{ p['items'] | length }}개{% if p.next %} · 다음: {{ p.next.title }} {{ dday_label(p.next.dday) }}{% endif %}</summary>
+      <table class="tbl deadlines">
+        <thead><tr><th>기한 항목</th><th>날짜</th><th class="c-num">남은 날</th><th>완료</th><th>메모</th><th></th></tr></thead>
+        <tbody>
+        {% for d in p['items'] %}
+          <tr class="{{ 'row-done' if d.done_at }} {{ 'row-over' if d.overdue }}">
+            <td class="wide d-title">{{ d.title }}{% if d.holidays %}<div class="sub amber">{{ d.holidays | join(', ') }}</div>{% endif %}</td>
+            <td class="d-date" data-label="날짜"><input form="f{{ d.id }}" type="date" name="due_date" value="{{ d.due_date or '' }}"></td>
+            <td class="c-num d-dday" data-label="남은 날">{{ '' if d.done_at else dday_label(d.dday) }}</td>
+            <td class="d-done" data-label="완료"><input form="f{{ d.id }}" type="checkbox" name="done" value="1" {{ 'checked' if d.done_at }}></td>
+            <td class="d-memo" data-label="메모"><input form="f{{ d.id }}" type="text" name="memo" value="{{ d.memo or '' }}" maxlength="300">
+                <input form="f{{ d.id }}" type="hidden" name="owner" value="{{ d.owner or '' }}"></td>
+            <td class="d-save"><form id="f{{ d.id }}" method="post" action="/deadlines/{{ d.id }}"><button type="submit">저장</button></form></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </details>
+      <form method="post" action="/projects/{{ p.id }}/deadlines" class="inline-form">
+        <input type="text" name="title" placeholder="추가할 기한 항목 (예: 중간 보고)" maxlength="100" required>
+        <input type="date" name="due_date">
+        <button type="submit">항목 추가</button>
+      </form>
+    </section>
+    {% else %}
+    <section class="card"><p class="empty">등록된 프로젝트가 없습니다. 오른쪽에서 추가하십시오.</p></section>
+    {% endfor %}
+  </div>
+
+  <div class="col-side">
+    <section class="card">
+      <h2>다가오는 기한 <span class="muted">14일</span></h2>
+      <ul class="list">
+      {% for d in upcoming %}
+        <li class="{{ 'red' if d.overdue }}"><b>{{ dday_label(d.dday) }}</b> {{ d.title }}
+          <div class="sub"><span class="dot" style="background:{{ d.color }}"></span>{{ d.customer_name }} · {{ d.due_date }}{% if d.holidays %} · {{ d.holidays | join(', ') }}{% endif %}</div></li>
+      {% else %}
+        <li class="empty">14일 안에 닥친 기한이 없습니다.</li>
+      {% endfor %}
+      </ul>
+    </section>
+    <section class="card">
+      <h2>프로젝트 추가</h2>
+      <form method="post" action="/projects" class="stack">
+        <label>고객사<select name="customer_code">{% for code, c in cfg.customers.items() %}<option value="{{ code }}">{{ c.name }}</option>{% endfor %}</select></label>
+        <label>프로젝트 이름<input type="text" name="name" maxlength="100" required></label>
+        <button type="submit" class="primary">추가</button>
+      </form>
+      <p class="sub">입찰부터 인계까지의 기한 항목이 빈칸으로 만들어집니다. 날짜만 채우면 됩니다.</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

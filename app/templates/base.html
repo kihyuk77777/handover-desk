@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}{{ APP_TITLE }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css?v={{ STATIC_VER }}">
+</head>
+<body>
+<aside class="side">
+  <div class="brand">{{ APP_TITLE }}</div>
+  <nav>
+    <a href="/" class="{{ 'on' if active == 'dashboard' }}">대시보드</a>
+    <a href="/issues" class="{{ 'on' if active == 'issues' }}">문의 목록</a>
+    <a href="/calendar" class="{{ 'on' if active == 'calendar' }}">기한 달력</a>
+    <a href="/news" class="{{ 'on' if active == 'news' }}">최신 보안 동향</a>
+    <div class="nav-sep">기록</div>
+    <a href="/alerts" class="{{ 'on' if active == 'alerts' }}">알림 기록</a>
+    <a href="/held" class="{{ 'on' if active == 'held' }}">보류 메일</a>
+    <a href="/settings" class="{{ 'on' if active == 'settings' }}">설정·상태</a>
+  </nav>
+  {% if AUTH_ON %}<form method="post" action="/logout" class="logout"><button type="submit">로그아웃</button></form>{% endif %}
+</aside>
+<main id="content" {% block main_attrs %}{% endblock %}>
+{% block content %}{% endblock %}
+</main>
+<script src="/static/app.js?v={{ STATIC_VER }}"></script>
+</body>
+</html>
