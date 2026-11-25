@@ -142,6 +142,22 @@ def _check_text(value, name: str, max_len: int) -> str:
     return value.strip()[:max_len]
 
 
+def _check_bool(data: dict, name: str, default: bool) -> bool:
+    value = data.get(name, default)
+    if not isinstance(value, bool):
+        raise LLMError(f"{name} 항목이 참·거짓이 아님: {value!r}")
+    return value
+
+
+def _check_count(value) -> int:
+    if value is None:
+        return 1
+    # bool 은 int 의 하위 형이라 따로 걸러 낸다.
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise LLMError(f"issue_count 항목이 정수가 아님: {value!r}")
+    return max(1, min(value, 9))
+
+
 def triage(subject: str, text: str, cfg: Config | None = None, timeout: float = 120) -> dict:
     """메일을 정해진 항목으로 정리하고 긴급도를 판단한다. 점검에 걸리면 LLMError."""
     gloss = ""
@@ -161,8 +177,8 @@ def triage(subject: str, text: str, cfg: Config | None = None, timeout: float = 
     if data.get("urgency") not in URGENCY:
         raise LLMError(f"알 수 없는 긴급도: {data.get('urgency')!r}")
     out = {
-        "is_new_issue": bool(data.get("is_new_issue", True)),
-        "issue_count": max(1, min(int(data.get("issue_count") or 1), 9)),
+        "is_new_issue": _check_bool(data, "is_new_issue", True),
+        "issue_count": _check_count(data.get("issue_count")),
         "category": data["category"],
         "urgency": data["urgency"],
         "urgency_reason": _check_text(data.get("urgency_reason"), "urgency_reason", 200),
@@ -171,7 +187,7 @@ def triage(subject: str, text: str, cfg: Config | None = None, timeout: float = 
         "where": str(data.get("where") or "미기재").strip()[:200],
         "when": str(data.get("when") or "미기재").strip()[:120],
         "impact": str(data.get("impact") or "미기재").strip()[:200],
-        "injection_suspected": bool(data.get("injection_suspected", False)),
+        "injection_suspected": _check_bool(data, "injection_suspected", False),
     }
     if hangul_ratio(out["summary"]) < 0.5:
         raise LLMError("요약이 한국어가 아님")

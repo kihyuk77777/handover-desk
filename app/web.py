@@ -13,7 +13,7 @@ from . import auth, db, deadlines, notify, views
 from .config import BALL_NAMES, CATEGORIES, LEVEL_NAMES, LEVELS, STATUS_NAMES, Config, env
 
 BASE = Path(__file__).parent
-app = FastAPI(title="PM Desk", docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Handover Desk", docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals.update(
@@ -69,10 +69,6 @@ def page(request: Request, name: str, **ctx):
     ctx.setdefault("cfg", cfg)
     ctx.setdefault("active", name.split(".")[0])
     return templates.TemplateResponse(request, name, ctx)
-
-
-def back(request: Request, fallback: str) -> RedirectResponse:
-    return RedirectResponse(fallback, status_code=303)
 
 
 # ---------- 로그인 ----------

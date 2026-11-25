@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from datetime import datetime
@@ -9,6 +10,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 os.environ.pop("TELEGRAM_BOT_TOKEN", None)
+
+TRIAGE_OK = {"is_new_issue": True, "issue_count": 1, "category": "사용문의", "urgency": "low",
+             "urgency_reason": "사용 방법 문의", "title": "정리된 제목", "summary": "정리된 요약입니다.",
+             "where": "미기재", "when": "미기재", "impact": "미기재", "injection_suspected": False}
 
 
 @pytest.fixture()
@@ -54,11 +59,7 @@ def fake_model(monkeypatch):
         state["calls"].append(("triage", text))
         if state["fail"]:
             raise llm.LLMError("연결 실패")
-        base = {"is_new_issue": True, "issue_count": 1, "category": "사용문의", "urgency": "low",
-                "urgency_reason": "사용 방법 문의", "title": "정리된 제목", "summary": "정리된 요약입니다.",
-                "where": "미기재", "when": "미기재", "impact": "미기재", "injection_suspected": False}
-        base.update(state["triage"] or {})
-        return base
+        return {**TRIAGE_OK, **(state["triage"] or {})}
 
     def translate(text, lang, cfg, timeout=120):
         state["calls"].append(("translate", text))
@@ -69,3 +70,12 @@ def fake_model(monkeypatch):
     monkeypatch.setattr(llm, "triage", triage)
     monkeypatch.setattr(llm, "translate_ko", translate)
     return state
+
+
+@pytest.fixture()
+def model_answer():
+    """모델이 돌려준 것처럼 보이는 정리 결과(JSON 문자열)를 만든다. 실제 점검 코드를 거치게 할 때 쓴다."""
+    def _make(**over):
+        return json.dumps({**TRIAGE_OK, **over}, ensure_ascii=False)
+
+    return _make

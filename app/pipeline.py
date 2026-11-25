@@ -12,7 +12,7 @@ from . import llm, notify
 from .config import Config, max_level
 from .db import TS, add_event, now, parse_ts
 from .mail_sources import RawMail
-from .preprocess import clean_body
+from .preprocess import clean_body, mask_secrets
 from .rules import evaluate, is_after_hours
 
 MAX_ATTEMPTS = 3
@@ -24,12 +24,12 @@ def is_seen(conn, source: str, source_id: str) -> bool:
         "SELECT 1 FROM mails WHERE source=? AND source_id=?", (source, source_id)).fetchone() is not None
 
 
-def _insert_mail(conn, raw: RawMail, clean: dict, held: str | None) -> int:
+def _insert_mail(conn, raw: RawMail, subject: str, clean: dict, held: str | None) -> int:
     cur = conn.execute(
         "INSERT INTO mails (source, source_id, thread_key, from_addr, from_name, subject, received_at, "
         "body, lang, masked_count, truncated, attachments, auth, in_spam, held_reason, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (raw.source, raw.source_id, raw.thread_key, raw.from_addr, raw.from_name, raw.subject,
+        (raw.source, raw.source_id, raw.thread_key, raw.from_addr, raw.from_name, subject,
          raw.received_at.strftime(TS), clean["text"], clean["lang"], clean["masked"],
          int(clean["truncated"]), json.dumps(raw.attachments, ensure_ascii=False), raw.auth,
          int(raw.in_spam), held, now()),
@@ -38,11 +38,12 @@ def _insert_mail(conn, raw: RawMail, clean: dict, held: str | None) -> int:
 
 
 def record_skipped(conn, raw: RawMail, reason: str) -> None:
-    """처리 대상이 아닌 메일을 본문 없이 번호만 남긴다(다시 가져오지 않기 위함)."""
+    """처리하지 않을 메일을 본문 없이 기록해, 다음 수집 때 다시 가져오지 않게 한다."""
     if is_seen(conn, raw.source, raw.source_id):
         return
-    empty = {"text": "", "lang": "", "masked": 0, "truncated": False}
-    _insert_mail(conn, raw, empty, reason)
+    subject, masked = mask_secrets(raw.subject or "")
+    empty = {"text": "", "lang": "", "masked": masked, "truncated": False}
+    _insert_mail(conn, raw, subject, empty, reason)
 
 
 def ingest(conn, cfg: Config, raw: RawMail, mark_late: bool = True) -> int | None:
@@ -50,6 +51,9 @@ def ingest(conn, cfg: Config, raw: RawMail, mark_late: bool = True) -> int | Non
     if is_seen(conn, raw.source, raw.source_id):
         return None
     clean = clean_body(raw.body_text)
+    # 제목도 저장소·모델·알림으로 넘어가므로 본문과 같은 기준으로 가린다.
+    subject, subject_masked = mask_secrets(raw.subject or "")
+    clean["masked"] += subject_masked
     sender = cfg.senders.get(raw.from_addr)
 
     held = None
@@ -58,11 +62,11 @@ def ingest(conn, cfg: Config, raw: RawMail, mark_late: bool = True) -> int | Non
     elif raw.auth == "fail":
         held = "발신 인증 실패"
     if held:
-        _insert_mail(conn, raw, clean, held)
+        _insert_mail(conn, raw, subject, clean, held)
         return None
 
-    mail_id = _insert_mail(conn, raw, clean, None)
-    rule = evaluate(raw.subject, clean["text"], cfg)
+    mail_id = _insert_mail(conn, raw, subject, clean, None)
+    rule = evaluate(subject, clean["text"], cfg)
     stamp = now()
     late_after = int(cfg.alert.get("late_minutes", 10))
     late = mark_late and (datetime.now() - raw.received_at) > timedelta(minutes=late_after)
@@ -104,7 +108,7 @@ def ingest(conn, cfg: Config, raw: RawMail, mark_late: bool = True) -> int | Non
         "after_hours, late, opened_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'rule', ?, 'pending', 'open', 'us', ?, ?, ?, ?, ?, ?)",
         (sender["customer"], raw.from_addr, sender.get("name") or raw.from_name, raw.thread_key,
-         raw.subject, clean["lang"],
+         subject, clean["lang"],
          "urgent" if rule["level"] == "urgent" else "normal", rule["level"],
          json.dumps(rule["hits"], ensure_ascii=False), raw.received_at.strftime(TS), engineer,
          int(is_after_hours(raw.received_at, cfg)), int(late),
@@ -124,6 +128,19 @@ def ingest(conn, cfg: Config, raw: RawMail, mark_late: bool = True) -> int | Non
     return issue_id
 
 
+def _schedule_retry(conn, job, attempts: int, exc: Exception) -> bool:
+    """다시 시도할 시각을 잡는다. 횟수를 다 썼으면 작업을 실패로 닫고 False."""
+    error = str(exc)[:300]
+    if attempts < MAX_ATTEMPTS:
+        retry = (datetime.now() + timedelta(seconds=RETRY_SECONDS)).strftime(TS)
+        conn.execute("UPDATE jobs SET attempts=?, run_after=?, error=? WHERE id=?",
+                     (attempts, retry, error, job["id"]))
+        return True
+    conn.execute("UPDATE jobs SET status='failed', attempts=?, error=?, done_at=? WHERE id=?",
+                 (attempts, error, now(), job["id"]))
+    return False
+
+
 def next_job(conn):
     return conn.execute(
         "SELECT * FROM jobs WHERE status='queued' AND (run_after IS NULL OR run_after <= ?) "
@@ -140,13 +157,7 @@ def run_job(conn, cfg: Config, job) -> bool:
     try:
         result = llm.triage(mail["subject"], mail["body"], cfg)
     except llm.LLMError as exc:
-        if attempts < MAX_ATTEMPTS:
-            retry = (datetime.now() + timedelta(seconds=RETRY_SECONDS)).strftime(TS)
-            conn.execute("UPDATE jobs SET attempts=?, run_after=?, error=? WHERE id=?",
-                         (attempts, retry, str(exc)[:300], job["id"]))
-        else:
-            conn.execute("UPDATE jobs SET status='failed', attempts=?, error=?, done_at=? WHERE id=?",
-                         (attempts, str(exc)[:300], now(), job["id"]))
+        if not _schedule_retry(conn, job, attempts, exc):
             conn.execute("UPDATE issues SET model_status='failed', updated_at=? WHERE id=?",
                          (now(), issue["id"]))
             add_event(conn, issue["id"], "model", f"모델 처리 실패: {str(exc)[:150]}")
@@ -201,15 +212,9 @@ def _run_followup(conn, cfg: Config, job, mail, issue, attempts: int) -> bool:
     try:
         translation = llm.translate_ko(mail["body"], mail["lang"], cfg)
     except llm.LLMError as exc:
-        if attempts < MAX_ATTEMPTS:
-            retry = (datetime.now() + timedelta(seconds=RETRY_SECONDS)).strftime(TS)
-            conn.execute("UPDATE jobs SET attempts=?, run_after=?, error=? WHERE id=?",
-                         (attempts, retry, str(exc)[:300], job["id"]))
-            return False
-        conn.execute("UPDATE jobs SET status='failed', attempts=?, error=?, done_at=? WHERE id=?",
-                     (attempts, str(exc)[:300], now(), job["id"]))
-        add_event(conn, issue["id"], "model", f"추가 글 번역 실패: {str(exc)[:150]}")
-        notify.alert_followup(conn, cfg, issue["id"], mail["id"], False, "번역하지 못해 원문만 보냄")
+        if not _schedule_retry(conn, job, attempts, exc):
+            add_event(conn, issue["id"], "model", f"추가 글 번역 실패: {str(exc)[:150]}")
+            notify.alert_followup(conn, cfg, issue["id"], mail["id"], False, "번역하지 못해 원문만 보냄")
         return False
     conn.execute("UPDATE mails SET translation=? WHERE id=?", (translation, mail["id"]))
     conn.execute("UPDATE jobs SET status='done', attempts=?, done_at=? WHERE id=?",

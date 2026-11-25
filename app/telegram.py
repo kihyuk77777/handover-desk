@@ -1,4 +1,4 @@
-"""텔레그램 봇 API 호출. 봇 토큰이 없으면 실제로 보내지 않고 기록만 남긴다."""
+"""텔레그램 봇 API를 호출하고, 실패한 응답은 TelegramError로 알린다."""
 import json
 import urllib.error
 import urllib.request

@@ -1,4 +1,4 @@
-"""화면에 뿌릴 자료를 저장소에서 모은다. 건수와 순서는 모두 여기서 코드로 계산한다."""
+"""대시보드와 목록 화면에 쓸 자료를 저장소에서 읽어 만든다."""
 import json
 from datetime import date, datetime, time, timedelta
 

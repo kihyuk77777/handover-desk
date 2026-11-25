@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta
 
-from app import notify, pipeline, telegram
+from app import llm, notify, pipeline, telegram
 
 
 def _issue(conn, issue_id):
@@ -89,6 +89,43 @@ def test_secret_is_masked_before_model_and_storage(conn, cfg, make_mail, fake_mo
     assert "Saeron@2026!" not in sent_to_model
     assert "Saeron@2026!" not in conn.execute("SELECT body FROM mails").fetchone()[0]
     assert all("Saeron@2026!" not in r["text"] for r in conn.execute("SELECT text FROM outbox"))
+
+
+def test_secret_in_subject_is_masked_too(conn, cfg, make_mail, model_answer, monkeypatch):
+    prompts = []
+
+    def chat(system, user, **kwargs):
+        prompts.append(user)
+        return model_answer()
+
+    monkeypatch.setattr(llm, "chat", chat)
+    secret = "Saeron@2026!"
+    issue_id = pipeline.ingest(conn, cfg, make_mail("서버가 다운됐습니다.", subject=f"비밀번호 {secret} 로 바꿔 주세요"))
+    pipeline.ingest(conn, cfg, make_mail("문의", subject=f"pwd={secret}", sender="x@unknown.example"))
+    assert conn.execute("SELECT COUNT(*) FROM outbox WHERE kind='issue_first'").fetchone()[0]
+    _run_all(conn, cfg)
+    assert prompts and all(secret not in p for p in prompts)
+    assert all(secret not in r["subject"] for r in conn.execute("SELECT subject FROM mails"))
+    assert secret not in _issue(conn, issue_id)["subject"]
+    assert all(secret not in r["text"] for r in conn.execute("SELECT text FROM outbox"))
+
+
+def test_malformed_model_answer_fails_only_that_job(conn, cfg, make_mail, model_answer, monkeypatch):
+    """형식이 틀린 답은 재시도 뒤 실패로 닫히고, 뒤에 선 작업을 막지 않는다."""
+    def chat(system, user, **kwargs):
+        return model_answer(issue_count="셋") if "첫 번째 문의" in user else model_answer()
+
+    monkeypatch.setattr(llm, "chat", chat)
+    bad = pipeline.ingest(conn, cfg, make_mail("첫 번째 문의입니다."))
+    good = pipeline.ingest(conn, cfg, make_mail("두 번째 문의입니다."))
+    first = pipeline.next_job(conn)
+    assert pipeline.run_job(conn, cfg, first) is False
+    assert pipeline.next_job(conn)["id"] != first["id"]
+    _run_all(conn, cfg)
+    assert _issue(conn, good)["model_status"] == "done"
+    assert _issue(conn, bad)["model_status"] == "failed"
+    job = conn.execute("SELECT status, attempts FROM jobs WHERE id=?", (first["id"],)).fetchone()
+    assert (job["status"], job["attempts"]) == ("failed", pipeline.MAX_ATTEMPTS)
 
 
 def test_reply_attaches_to_existing_issue_and_can_escalate(conn, cfg, make_mail, fake_model):
